@@ -329,7 +329,7 @@ class TMDBMovieScraper(object):
         cast = [{
                 'name': actor['name'],
                 'role': actor['character'],
-                'thumbnail': self.urls['original'] + actor['profile_path']
+                'thumbnail': self._get_proxy() + self.urls['original'] + actor['profile_path']
                     if actor['profile_path'] else "",
                 'order': actor['order']
             }
