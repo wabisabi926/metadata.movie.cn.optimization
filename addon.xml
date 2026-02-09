@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<addon id="metadata.video.tmdb.cn.optimization"
-       name="TMDB Video CN Optimization"
+<addon id="metadata.movie.cn.optimization"
+       name="metadata.movie.cn.optimization"
        version="3.1.7"
        provider-name="Team Kodi+forbxy">
   <requires>
