@@ -135,7 +135,7 @@ msgstr "代理"
 
 msgctxt "#32006"
 msgid "TMDB API Base URL"
-msgstr "TMDB API基础URL"
+msgstr "TMDB API 基础 URL"
 
 msgctxt "#32007"
 msgid "Image Proxy"
@@ -143,15 +143,15 @@ msgstr "图片代理"
 
 msgctxt "#32008"
 msgid "Fanart Base URL"
-msgstr "fanart基础URL"
+msgstr "Fanart 基础 URL"
 
 msgctxt "#32009"
 msgid "IMDb Base URL"
-msgstr "imdb基础url"
+msgstr "IMDb 基础 URL"
 
 msgctxt "#32010"
 msgid "Trakt TV Base URL"
-msgstr "trakt tv基础url"
+msgstr "Trakt TV 基础 URL"
 
 msgctxt "#30021"
 msgid "Write Pinyin Initials to SortTitle"
@@ -160,4 +160,3 @@ msgstr "将片名拼音首字母写入数据库排序名字段"
 msgctxt "#30022"
 msgid "Write Pinyin Initials to OriginalTitle"
 msgstr "将片名拼音首字母写入数据库原始片名字段"
-
