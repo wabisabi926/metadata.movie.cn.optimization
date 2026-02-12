@@ -138,6 +138,11 @@
 						<heading>30013</heading>
 					</control>
 				</setting>
+				<setting id="enable_local_map" type="boolean" label="30023" help="">
+					<level>0</level>
+					<default>true</default>
+					<control type="toggle"/>
+				</setting>
 				<setting id="write_initials" type="boolean" label="30021" help="">
 					<level>0</level>
 					<default>true</default>
@@ -320,7 +325,7 @@
 				</setting>
 				<setting id="fanarttv_language" type="string" label="30100" help="">
 					<level>0</level>
-					<default>en</default>
+					<default>zh</default>
 					<constraints>
 						<options>
 							<option>en</option>

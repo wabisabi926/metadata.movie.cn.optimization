@@ -11,6 +11,7 @@ from lib.tmdbscraper import imdbratings
 from lib.tmdbscraper import traktratings
 from lib.tmdbscraper import api_utils
 from lib.tmdbscraper import tmdbapi
+from lib.tmdbscraper import imdb_mapper
 
 from scraper_datahelper import combine_scraped_details_info_and_ratings, \
     combine_scraped_details_available_artwork, find_uniqueids_in_text, get_params
@@ -118,14 +119,32 @@ def get_details(input_uniqueids, handle, settings, fail_silently=False):
         return False
 
     tmdb_scraper = get_tmdb_scraper(settings)
+    enable_local_map = settings.getSettingBool('enable_local_map')
     
     # Step 0: Resolve TMDB ID if missing
     tmdb_id = input_uniqueids.get('tmdb')
     if not tmdb_id and input_uniqueids.get('imdb'):
-        find_results = tmdbapi.find_movie_by_external_id(input_uniqueids['imdb'])
-        if find_results.get('movie_results'):
-            tmdb_id = str(find_results['movie_results'][0]['id'])
-            input_uniqueids['tmdb'] = tmdb_id
+        # 1. Try local reverse map first
+        if enable_local_map:
+            tmdb_id = imdb_mapper.get_tmdb_id(input_uniqueids['imdb'])
+            if tmdb_id:
+                input_uniqueids['tmdb'] = tmdb_id
+                xbmc.log(f'[{ID}] Resolved TMDB ID {tmdb_id} for {input_uniqueids["imdb"]} from local map', xbmc.LOGDEBUG)
+        
+        # 2. Fallback to API find
+        if not tmdb_id:
+            find_results = tmdbapi.find_movie_by_external_id(input_uniqueids['imdb'])
+            if find_results.get('movie_results'):
+                tmdb_id = str(find_results['movie_results'][0]['id'])
+                input_uniqueids['tmdb'] = tmdb_id
+            
+    # Try to supplement IMDB ID from local map if missing
+    if tmdb_id and not input_uniqueids.get('imdb') and enable_local_map:
+        mapped_imdb_id = imdb_mapper.get_imdb_id(tmdb_id)
+        if mapped_imdb_id:
+            input_uniqueids['imdb'] = mapped_imdb_id
+            xbmc.log(f'[{ID}] Supplemented IMDB ID {mapped_imdb_id} for TMDB ID {tmdb_id} from local map', xbmc.LOGDEBUG)
+
 
     # Step 1: Build Batch
     batch_requests = []
@@ -133,15 +152,15 @@ def get_details(input_uniqueids, handle, settings, fail_silently=False):
     if tmdb_id:
         batch_requests.extend(tmdb_scraper.get_movie_requests(tmdb_id))
         if is_fanarttv_configured(settings):
-             batch_requests.extend(fanarttv.get_movie_requests(input_uniqueids, 
+             batch_requests.extend(fanarttv.get_request(input_uniqueids, 
                 settings.getSettingString('fanarttv_clientkey'), None, settings=settings))
 
     if settings.getSettingString('RatingS') == 'IMDb' or settings.getSettingBool('imdbanyway'):
         # xbmc.log("Adding IMDb rating request to batch", xbmc.LOGINFO)
-        batch_requests.extend(imdbratings.get_movie_requests(input_uniqueids, settings=settings))
+        batch_requests.extend(imdbratings.get_request(input_uniqueids, settings=settings))
 
     if settings.getSettingString('RatingS') == 'Trakt' or settings.getSettingBool('traktanyway'):
-        batch_requests.extend(traktratings.get_movie_requests(input_uniqueids, settings=settings))
+        batch_requests.extend(traktratings.get_request(input_uniqueids, settings=settings))
 
     if not batch_requests:
         return False
@@ -194,10 +213,10 @@ def get_details(input_uniqueids, handle, settings, fail_silently=False):
         # 1. Collections
         collection_id = details.get('_info', {}).get('set_tmdbid')
         if collection_id:
-            batch_secondary.extend(tmdb_scraper.get_collection_requests(collection_id))
+            batch_secondary.extend(tmdb_scraper.get_collection_request(collection_id))
             
             if is_fanarttv_configured(settings):
-                fanart_reqs = fanarttv.get_movie_requests(input_uniqueids, 
+                fanart_reqs = fanarttv.get_request(input_uniqueids, 
                     settings.getSettingString('fanarttv_clientkey'),
                     collection_id, settings=settings)
                 # Only add collection requests
@@ -215,11 +234,11 @@ def get_details(input_uniqueids, handle, settings, fail_silently=False):
             # Check IMDb
             if settings.getSettingString('RatingS') == 'IMDb' or settings.getSettingBool('imdbanyway'):
                 # We know we didn't request it before because we didn't have the ID
-                batch_secondary.extend(imdbratings.get_movie_requests(input_uniqueids, settings=settings))
+                batch_secondary.extend(imdbratings.get_request(input_uniqueids, settings=settings))
 
             # Check Trakt
             if settings.getSettingString('RatingS') == 'Trakt' or settings.getSettingBool('traktanyway'):
-                batch_secondary.extend(traktratings.get_movie_requests(input_uniqueids, settings=settings))
+                batch_secondary.extend(traktratings.get_request(input_uniqueids, settings=settings))
         
         # Execute Secondary Batch
         if batch_secondary:
@@ -249,7 +268,7 @@ def get_details(input_uniqueids, handle, settings, fail_silently=False):
                 details = tmdb_scraper.parse_movie_response(responses_by_type)
 
     # Process IMDb
-    imdb_info = imdbratings.parse_movie_response(responses_by_type)
+    imdb_info = imdbratings.parse_response(responses_by_type)
     if imdb_info:
         if 'error' in imdb_info:
              log("IMDb error: " + imdb_info['error'], xbmc.LOGWARNING)
@@ -257,12 +276,12 @@ def get_details(input_uniqueids, handle, settings, fail_silently=False):
              details = combine_scraped_details_info_and_ratings(details, imdb_info)
 
     # Process Trakt
-    trakt_info = traktratings.parse_movie_response(responses_by_type)
+    trakt_info = traktratings.parse_response(responses_by_type)
     if trakt_info:
         details = combine_scraped_details_info_and_ratings(details, trakt_info)
         
     # Fanart
-    fanart_info = fanarttv.parse_movie_response(responses_by_type, settings.getSettingString('language'), settings=settings)
+    fanart_info = fanarttv.parse_response(responses_by_type, settings.getSettingString('language'), settings=settings)
     if fanart_info:
         details = combine_scraped_details_available_artwork(details,
             fanart_info,
@@ -346,7 +365,7 @@ def run():
         
         # Extract and set DNS settings globally for api_utils
         dns_settings = get_dns_settings(settings)
-        api_utils.set_dns_settings(dns_settings)
+        api_utils.set_custom_ip(dns_settings)
         action = params["action"]
         if action == 'find' and 'title' in params:
             xbmc.log(f"Searching for movie: {params['title']} ({params.get('year', 'N/A')})", xbmc.LOGINFO)

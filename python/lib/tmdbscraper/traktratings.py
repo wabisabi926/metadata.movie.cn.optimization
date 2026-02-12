@@ -43,12 +43,7 @@ def get_trakt_url(settings=None):
         if settings:
             base = settings.getSettingString('trakt_base_url')
         if not base:
-            base = 'api.trakt.tv'
-        # If the user input doesn't start with api. and the original was api., 
-        # we might want to be careful, but we follow instructions.
-        # Original: https://api.trakt.tv/movies/{}
-        # If user inputs 'trakt.tv', result: https://trakt.tv/movies/{}
-        # If user inputs 'api.trakt.tv', result: https://api.trakt.tv/movies/{}
+            base = 'https://api.trakt.tv'
         if not base.startswith('http'):
             base = 'https://' + base
         return base + '/movies/{}'
@@ -56,7 +51,7 @@ def get_trakt_url(settings=None):
         return 'https://api.trakt.tv/movies/{}'
 
 
-def get_movie_requests(uniqueids, settings=None):
+def get_request(uniqueids, settings=None):
     imdb_id = get_imdb_id(uniqueids)
     if not imdb_id:
         return []
@@ -70,7 +65,7 @@ def get_movie_requests(uniqueids, settings=None):
     }]
 
 
-def parse_movie_response(responses):
+def parse_response(responses):
     movie_info = responses.get('trakt_rating')
     result = {}
     if(movie_info):
@@ -81,16 +76,4 @@ def parse_movie_response(responses):
     return result
 
 
-def get_trakt_ratinginfo(uniqueids, settings=None):
-    imdb_id = get_imdb_id(uniqueids)
-    result = {}
-    url = get_trakt_url(settings).format(imdb_id)
-    params = {'extended': 'full'}
-    api_utils.set_headers(dict(HEADERS))
-    movie_info = api_utils.load_info(url, params=params, default={})
-    if(movie_info):
-        if 'votes' in movie_info and 'rating' in movie_info:
-            result['ratings'] = {'trakt': {'votes': int(movie_info['votes']), 'rating': float(movie_info['rating'])}}
-        elif 'rating' in movie_info:
-            result['ratings'] = {'trakt': {'rating': float(movie_info['rating'])}}
-    return result
+

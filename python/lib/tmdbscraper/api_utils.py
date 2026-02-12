@@ -1,73 +1,31 @@
 # coding: utf-8
-#
-# Copyright (C) 2020, Team Kodi
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-"""Functions to interact with various web site APIs."""
-
-from __future__ import absolute_import, unicode_literals
-
+import xbmc
+import xbmcgui
 import json
+import time
 import socket
 import requests
-from urllib.parse import urlparse
 
-try:
-    import xbmc
-    import xbmcgui
-except ModuleNotFoundError:
-    # only used for logging HTTP calls, not available nor needed for testing
-    xbmc = None
-    xbmcgui = None
-
-# from pprint import pformat
-try: #PY2 / PY3
-    from urllib2 import Request, urlopen
-    from urllib2 import URLError
-    from urllib import urlencode
-except ImportError:
-    from urllib.request import Request, urlopen
-    from urllib.error import URLError
-    from urllib.parse import urlencode
-try:
-    from typing import Text, Optional, Union, List, Dict, Any  # pylint: disable=unused-import
-    InfoType = Dict[Text, Any]  # pylint: disable=invalid-name
-except ImportError:
-    pass
+from urllib.parse import urlencode
 
 HEADERS = {}
 DNS_SETTINGS = {}
-SERVICE_HOST = '127.0.0.1'
+SERVICE_PORT = 56789
 
 def set_headers(headers):
     HEADERS.clear()
     HEADERS.update(headers)
 
-def set_dns_settings(settings):
-    DNS_SETTINGS.clear()
-    if settings:
-        DNS_SETTINGS.update(settings)
-
-import time
-
 def ensure_daemon_started():
+    global SERVICE_PORT
     """Ensure the daemon process is running."""
     if not xbmc: return False
     
     # Check if port is already set
-    if xbmcgui.Window(10000).getProperty('TMDB_OPTIMIZATION_SERVICE_PORT'):
+    port = xbmcgui.Window(10000).getProperty('TMDB_OPTIMIZATION_SERVICE_PORT')
+    if port:
+        SERVICE_PORT = int(port)
         return True
         
     xbmc.log('[TMDB Scraper] Daemon not running, starting...', xbmc.LOGINFO)
@@ -78,7 +36,9 @@ def ensure_daemon_started():
     
     # Wait for port to be available (max 5 seconds)
     for _ in range(50):
-        if xbmcgui.Window(10000).getProperty('TMDB_OPTIMIZATION_SERVICE_PORT'):
+        port = xbmcgui.Window(10000).getProperty('TMDB_OPTIMIZATION_SERVICE_PORT')
+        if port:
+            SERVICE_PORT = int(port)
             xbmc.log('[TMDB Scraper] Daemon started successfully', xbmc.LOGINFO)
             return True
         time.sleep(0.1)
@@ -86,97 +46,29 @@ def ensure_daemon_started():
     xbmc.log('[TMDB Scraper] Failed to start daemon', xbmc.LOGERROR)
     return False
 
-def get_pinyin_from_service(text):
-    """Request pinyin conversion from daemon"""
+
+def _send_payload(payload, timeout=35):
     try:
         if not ensure_daemon_started():
-             # Fallback: if daemon fails, return empty string so scraping continues without pinyin
-             if xbmc: xbmc.log('[TMDB Scraper] Daemon failed, skipping pinyin', xbmc.LOGWARNING)
-             return ""
-
-        service_port = 56789
-        port_prop = xbmcgui.Window(10000).getProperty('TMDB_OPTIMIZATION_SERVICE_PORT')
-        if port_prop:
-            service_port = int(port_prop)
-
-        payload = {'pinyin': text}
-        
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.settimeout(10) # 10s timeout
-            s.connect((SERVICE_HOST, service_port))
-            s.sendall(json.dumps(payload).encode('utf-8'))
-            
-            # Receive response
-            data = b""
-            while True:
-                chunk = s.recv(4096)
-                if not chunk:
-                    break
-                data += chunk
-            
-            if not data:
-                return ""
-                
-            response = json.loads(data)
-            return response.get('result', "")
-            
-    except Exception as e:
-        if xbmc:
-            xbmc.log(f'[TMDB Scraper] Pinyin Service Error: {e}', xbmc.LOGERROR)
-        return ""
-
-def load_info_from_service(url, params=None, headers=None, batch_payload=None, dns_settings=None):
-    """
-    Send request to the background service daemon via TCP socket.
-    Supports single request (url, params) or batch request (batch_payload).
-    """
-    try:
-        # Ensure daemon is running
-        if not ensure_daemon_started():
-             return {'error': 'Failed to start service daemon'}
+             return None
 
         # Get port dynamically from Window Property
-        service_port = 56789 # Default fallback
-        if xbmcgui:
-            port_str = xbmcgui.Window(10000).getProperty('TMDB_OPTIMIZATION_SERVICE_PORT')
-            if port_str:
-                service_port = int(port_str)
-            else:
-                return {'error': 'Service port not found in Window Property'}
-        
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(35) # Slightly longer than service timeout
+        sock.settimeout(timeout) 
         try:
-            sock.connect((SERVICE_HOST, service_port))
+            sock.connect(('127.0.0.1', SERVICE_PORT))
         except ConnectionRefusedError:
             # Retry once if connection refused (maybe daemon just died or restarting)
             xbmc.log('[TMDB Scraper] Connection refused, retrying daemon start...', xbmc.LOGWARNING)
             xbmcgui.Window(10000).clearProperty('TMDB_OPTIMIZATION_SERVICE_PORT')
             if ensure_daemon_started():
-                 port_str = xbmcgui.Window(10000).getProperty('TMDB_OPTIMIZATION_SERVICE_PORT')
-                 service_port = int(port_str)
                  sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                 sock.settimeout(35)
-                 sock.connect((SERVICE_HOST, service_port))
+                 sock.settimeout(timeout)
+                 sock.connect(('127.0.0.1', SERVICE_PORT))
             else:
-                 raise
+                 return None
 
-        # Construct Protocol V2 Payload
-        if batch_payload:
-            requests_list = batch_payload
-        else:
-            requests_list = [{
-                'url': url,
-                'params': params,
-                'headers': headers or {}
-            }]
-            
-        request_data = {
-            'requests': requests_list,
-            'dns_settings': dns_settings or DNS_SETTINGS
-        }
-        
-        sock.sendall(json.dumps(request_data).encode('utf-8'))
+        sock.sendall(json.dumps(payload).encode('utf-8'))
         
         # Read response
         response_data = b""
@@ -189,37 +81,79 @@ def load_info_from_service(url, params=None, headers=None, batch_payload=None, d
         sock.close()
         
         if not response_data:
-            return {'error': 'Empty response from service'}
-            
-        result = json.loads(response_data)
+            return None
         
-        # If it was a single request call (not batch_payload), unwrap the list result
-        if not batch_payload and isinstance(result, list) and len(result) == 1:
-            return result[0]
-            
-        return result
-        
-    except Exception as e:
-        
-        if isinstance(result, dict) and 'error' in result:
-            return {'error': result['error']}
-            
-        return result # Contains 'text', 'json', 'status' or list of results
+        return json.loads(response_data)
         
     except Exception as e:
         if xbmc:
-            xbmc.log('[TMDB Scraper] Service IPC Error: {}'.format(e), xbmc.LOGERROR)
-        return {'error': 'Service communication failed: {}'.format(e)}
+            xbmc.log(f'[TMDB Scraper] Service IPC Error: {e}', xbmc.LOGERROR)
+        return None
+
+def set_custom_ip(hosts_map):
+    """
+    Set custom DNS mapping in daemon.
+    :param hosts_map: dictionary of hostname -> ip
+    """
+    payload = {'custom_ip': hosts_map}
+    resp = _send_payload(payload)
+    if resp and 'custom_ip' in resp:
+        return True
+    return False
+
+def get_pinyin_from_service(text):
+    """Request pinyin conversion from daemon"""
+    payload = {'pinyin': [text]} # New protocol: list of strings
+    resp = _send_payload(payload, timeout=10)
+    
+    if resp and 'pinyin' in resp:
+        results = resp['pinyin']
+        if isinstance(results, list) and len(results) > 0:
+            return results[0] # Returns list of permutations
             
-        return result # Contains 'text', 'json', 'status'
+    # Fallback
+    if xbmc: xbmc.log('[TMDB Scraper] Pinyin failed or invalid response', xbmc.LOGWARNING)
+    return []
+
+def load_info_from_service(url, params=None, headers=None, batch_payload=None):
+    """
+    Send request to the background service daemon via TCP socket.
+    Supports single request (url, params) or batch request (batch_payload).
+    """
+    # Construct Protocol Payload
+    requests_list = []
+    if batch_payload:
+        requests_list = batch_payload
+    else:
+        requests_list = [{
+            'url': url,
+            'params': params,
+            'headers': headers or {}
+        }]
         
-    except Exception as e:
-        if xbmc:
-            xbmc.log('[TMDB Scraper] Service IPC Error: {}'.format(e), xbmc.LOGERROR)
-        return {'error': 'Service communication failed: {}'.format(e)}
+    payload = {'requests': requests_list}
+    
+    resp = _send_payload(payload)
+    
+    if not resp:
+        return {'error': 'Service communication failed'}
+    
+    if 'requests' in resp:
+        results = resp['requests']
+        # If it was a single request call (not batch_payload), unwrap logic
+        if not batch_payload:
+            if results and len(results) > 0:
+                 return results[0]
+            else:
+                 return {'error': 'No result in response'}
+        return results
+    
+    if 'error' in resp:
+         return {'error': resp['error']}
+
+    return {'error': 'Invalid response format'}
 
 def load_info(url, params=None, default=None, resp_type = 'json'):
-    # type: (Text, Optional[Dict[Text, Union[Text, List[Text]]]]) -> Union[dict, list]
     """
     Load info from external api using persistent service daemon
 

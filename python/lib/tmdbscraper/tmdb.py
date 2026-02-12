@@ -106,7 +106,7 @@ class TMDBMovieScraper(object):
         }
         return [req_movie, req_fallback]
 
-    def get_collection_requests(self, collection_id):
+    def get_collection_request(self, collection_id):
         from . import tmdbapi
         details_col = 'images'
         

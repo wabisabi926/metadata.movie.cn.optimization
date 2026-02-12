@@ -37,7 +37,7 @@ HEADERS = (
 )
 
 
-def get_movie_requests(uniqueids, clientkey, set_tmdbid, settings=None):
+def get_request(uniqueids, clientkey, set_tmdbid, settings=None):
     media_id = _get_mediaid(uniqueids)
     if not media_id:
         return []
@@ -66,7 +66,7 @@ def get_movie_requests(uniqueids, clientkey, set_tmdbid, settings=None):
     return reqs
 
 
-def parse_movie_response(responses, language, settings=None):
+def parse_response(responses, language, settings=None):
     movie_data = responses.get('fanart_movie')
     movieset_data = responses.get('fanart_collection')
     
@@ -87,41 +87,10 @@ def parse_movie_response(responses, language, settings=None):
     return {'available_art': available_art}
 
 
-def get_details(uniqueids, clientkey, language, set_tmdbid, settings=None):
-    media_id = _get_mediaid(uniqueids)
-    if not media_id:
-        return {}
-
-    movie_data = _get_data(media_id, clientkey, settings)
-    movieset_data = _get_data(set_tmdbid, clientkey, settings) if set_tmdbid else None
-    if not movie_data and not movieset_data:
-        return {}
-
-    movie_art = {}
-    movieset_art = {}
-    if movie_data:
-        movie_art = _parse_data(movie_data, language)
-    if movieset_data:
-        movieset_art = _parse_data(movieset_data, language)
-        movieset_art = {'set.' + key: value for key, value in movieset_art.items()}
-
-    available_art = movie_art
-    available_art.update(movieset_art)
-
-    return {'available_art': available_art}
-
 def _get_mediaid(uniqueids):
     for source in ('tmdb', 'imdb', 'unknown'):
         if source in uniqueids:
             return uniqueids[source]
-
-def _get_data(media_id, clientkey, settings=None):
-    headers = dict(HEADERS)
-    if clientkey:
-        headers['client-key'] = clientkey
-    api_utils.set_headers(headers)
-    fanarttv_url = get_api_url(settings).format(media_id)
-    return api_utils.load_info(fanarttv_url, default={})
 
 def _parse_data(data, language, language_fallback='en', settings=None):
     try:

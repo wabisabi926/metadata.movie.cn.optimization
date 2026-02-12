@@ -130,8 +130,8 @@ msgid "trakt.tv"
 msgstr "trakt.tv"
 
 msgctxt "#32005"
-msgid "Proxy"
-msgstr "Proxy"
+msgid "base URL"
+msgstr "base URL"
 
 msgctxt "#32006"
 msgid "TMDB API Base URL"

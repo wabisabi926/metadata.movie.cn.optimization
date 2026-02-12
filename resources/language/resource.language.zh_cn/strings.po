@@ -89,6 +89,10 @@ msgctxt "#30015"
 msgid "Maximum number of each artwork type - many artwork can cause an error scraping to MySQL database"
 msgstr "每种艺术作品类型的最大数量 - 如果艺术作品数量过多，会导致 MySQL 数据库刮擦出错"
 
+msgctxt "#30023"
+msgid "Prioritize local tmdb-imdb mapping"
+msgstr "优先使用本地tmdb-imdb映射"
+
 msgctxt "#30100"
 msgid "Language for Fanart.tv artwork"
 msgstr "Fanart.tv 艺术图片的语言"
@@ -130,8 +134,8 @@ msgid "trakt.tv"
 msgstr "trakt.tv"
 
 msgctxt "#32005"
-msgid "Proxy"
-msgstr "代理"
+msgid "base URL"
+msgstr "基础url"
 
 msgctxt "#32006"
 msgid "TMDB API Base URL"

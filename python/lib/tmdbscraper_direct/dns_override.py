@@ -14,6 +14,7 @@ ORIGINAL_GETADDRINFO = socket.getaddrinfo
 DNS_CACHE = {}
 DNS_LOCK = threading.Lock()
 CUSTOM_IP_MAP = {}
+SYSTEM_HOSTS_MAP = {}
 
 def is_ip_address(host):
     try:
@@ -40,26 +41,6 @@ def log(msg, level=None):
         # Ignore level parameter if not in XBMC, just print
         print(msg)
 
-def check_connectivity(ip, port=443, timeout=2.0, host=None):
-    try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(timeout)
-        
-        context = ssl.create_default_context()
-        context.check_hostname = False
-        context.verify_mode = ssl.CERT_NONE
-        
-        sock.connect((ip, port))
-        
-        with context.wrap_socket(sock, server_hostname=host if host else ip) as ssock:
-            pass
-            
-        log(f'[TMDB Scraper] SSL/TCP Check OK: {ip}:{port}', 'debug')
-        return True
-    except Exception as e:
-        log(f'[TMDB Scraper] Connectivity check failed for {ip}:{port} Error: {e}', 'warning')
-        return False
-
 def parse_hosts_file(path):
     mapping = {}
     try:
@@ -81,37 +62,32 @@ def parse_hosts_file(path):
     return mapping
 
 def load_hosts():
-    global CUSTOM_IP_MAP
-    
-    # Defaults via Hosts
-    CUSTOM_IP_MAP = {}
+    global SYSTEM_HOSTS_MAP
+    SYSTEM_HOSTS_MAP = {}
     
     # System Hosts
     try:
         if os.name == 'nt':
             system_hosts = os.path.join(os.environ.get('SystemRoot', 'C:\\Windows'), 'System32', 'drivers', 'etc', 'hosts')
-            CUSTOM_IP_MAP.update(parse_hosts_file(system_hosts))
+            SYSTEM_HOSTS_MAP.update(parse_hosts_file(system_hosts))
         else:
             system_hosts = '/etc/hosts'
-            CUSTOM_IP_MAP.update(parse_hosts_file(system_hosts))
+            SYSTEM_HOSTS_MAP.update(parse_hosts_file(system_hosts))
     except:
         pass
 
-    # Note: We rely on set_custom_ips to be called externally to populate CUSTOM_IP_MAP
-    # This avoids reading addon settings directly, which might be stale or not support per-path configs.
 
 def lookup_local_override(host):
-    # Custom IP Settings (includes Hosts file content)
+    # 1. Custom IP Map (User Settings - Highest Priority)
     if host in CUSTOM_IP_MAP:
-        ip = CUSTOM_IP_MAP[host]
-        # Verify connectivity if it's a critical domain? 
-        # Daemon did check_connectivity here.
-        if ip and check_connectivity(ip, host=host):
-            return ip
-        else:
-            log(f'[TMDB Scraper] Custom IP {ip} for {host} invalid/unreachable', 'warning')
+        return CUSTOM_IP_MAP[host]
+        
+    # 2. System Hosts File
+    if host in SYSTEM_HOSTS_MAP:
+        return SYSTEM_HOSTS_MAP[host]
+        
     return None
-
+        
 def lookup_doh(host):
     # 1. Cache
     with DNS_LOCK:
@@ -177,14 +153,15 @@ def set_custom_hosts(ip_map):
     
     for domain, ip in ip_map.items():
         if not ip:
-            # Remove override if exists (e.g. invalid setting or explicit reset)
+            # Remove override if exists
             if domain in CUSTOM_IP_MAP:
                 del CUSTOM_IP_MAP[domain]
+                log(f'[TMDB Service] Removed Global Custom IP for {domain}', 'info')
         else:
             # Update/Overwrite
-            CUSTOM_IP_MAP[domain] = ip
-            
-    log(f'[TMDB Scraper] Externally set. Total {len(CUSTOM_IP_MAP)} custom IPs', 'info')
+            if CUSTOM_IP_MAP.get(domain) != ip:
+                CUSTOM_IP_MAP[domain] = ip
+                log(f'[TMDB Service] Updated Global Custom IP for {domain} -> {ip}', 'info')
 
 load_hosts()
 

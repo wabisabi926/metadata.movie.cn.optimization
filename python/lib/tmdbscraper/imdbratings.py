@@ -29,7 +29,7 @@ def get_imdb_url(settings=None):
         if settings:
             base = settings.getSettingString('imdb_base_url')
         if not base:
-            base = 'www.imdb.com'
+            base = 'https://www.imdb.com'
         if not base.startswith('http'):
             base = 'https://' + base
         return base + '/title/{}/'
@@ -49,7 +49,7 @@ HEADERS = (
     ('Accept', 'application/json'),
 )
 
-def get_movie_requests(uniqueids, settings=None):
+def get_request(uniqueids, settings=None):
     imdb_id = get_imdb_id(uniqueids)
     if not imdb_id:
         return []
@@ -62,7 +62,7 @@ def get_movie_requests(uniqueids, settings=None):
         'resp_type': 'text'
     }]
 
-def parse_movie_response(responses):
+def parse_response(responses):
     response = responses.get('imdb_rating')
     if not response:
         return {}
@@ -70,18 +70,6 @@ def parse_movie_response(responses):
     # response is text because we set resp_type='text' in request
     votes, rating, top250 = _parse_imdb_result(response)
     return _assemble_imdb_result(votes, rating, top250)
-
-def get_details(uniqueids, settings=None):
-    imdb_id = get_imdb_id(uniqueids)
-    if not imdb_id:
-        return {}
-    votes, rating, top250 = _get_ratinginfo(imdb_id, settings)
-    return _assemble_imdb_result(votes, rating, top250)
-
-def _get_ratinginfo(imdb_id, settings=None):
-    api_utils.set_headers(dict(HEADERS))
-    response = api_utils.load_info(get_imdb_url(settings).format(imdb_id), default = '', resp_type='text')
-    return _parse_imdb_result(response)
 
 def _assemble_imdb_result(votes, rating, top250):
     result = {}

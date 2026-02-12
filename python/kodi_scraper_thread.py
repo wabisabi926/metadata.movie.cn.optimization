@@ -22,10 +22,13 @@ if script_dir not in sys.path:
     sys.path.append(script_dir)
 
 try:
-    from python.scraper_direct import ScraperRunner
+    from scraper_direct import ScraperRunner
 except ImportError:
-    xbmc.log("Failed to import scraper_runner. ensure python/scraper_runner.py exists.", xbmc.LOGERROR)
-    ScraperRunner = None
+    try:
+        from python.scraper_direct import ScraperRunner
+    except ImportError:
+        xbmc.log("Failed to import scraper_runner. ensure scraper_direct.py exists.", xbmc.LOGERROR)
+        ScraperRunner = None
 
 try:
     from lib.tmdbscraper_direct import dns_override
@@ -997,11 +1000,11 @@ class KodiScraperSimulation:
         return False
 
 
-    def handle_finished_futures(self, done_futures, path_total_process):
+    def handle_finished_futures(self, done_futures):
         for f in done_futures:
             if f not in self.future_map: continue
                 
-            f_path, _ = self.future_map.pop(f)
+            f_path, _, weight = self.future_map.pop(f)
             self.running_futures.remove(f)
             
             # process_file returns 'details' or None
@@ -1010,7 +1013,8 @@ class KodiScraperSimulation:
             except: details = None
             
             self.stats_processed += 1
-            self.deal_process += path_total_process
+            if weight:
+                self.deal_process += weight
             scraped_title = None
             if details:
                 self.stats_success += 1
@@ -1113,14 +1117,14 @@ class KodiScraperSimulation:
                     
                     # BLOCKING WAIT: Wait for at least one future to complete
                     done, _ = wait(self.running_futures, return_when=FIRST_COMPLETED)
-                    self.handle_finished_futures(done, item_weight_process)
+                    self.handle_finished_futures(done)
 
                 if self.check_should_stop(): break
 
                 # Submit new task
                 future = self.executor.submit(self.process_file, full_path, settings, video_files_in_dir)
                 self.running_futures.add(future)
-                self.future_map[future] = (full_path, settings)
+                self.future_map[future] = (full_path, settings, item_weight_process)
         
         # Process Directories
         for d in dirs:
@@ -1258,7 +1262,7 @@ class KodiScraperSimulation:
                 # Flush final remaining futures
                 while self.running_futures and not self.check_should_stop():
                      done, _ = wait(self.running_futures, return_when=FIRST_COMPLETED)
-                     self.handle_finished_futures(done, 0) # Weight 0 as dealt during loop
+                     self.handle_finished_futures(done)
                     
         except KeyboardInterrupt:
             xbmc.log("Scan cancelled by user.", xbmc.LOGINFO)

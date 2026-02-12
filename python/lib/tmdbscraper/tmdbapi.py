@@ -45,7 +45,7 @@ def get_base_url(settings=None):
         if settings:
             base = settings.getSettingString('tmdb_api_base_url')
         if not base:
-            base = 'api.tmdb.org'
+            base = 'https://api.tmdb.org'
         if not base.startswith('http'):
             base = 'https://' + base
         return base + '/3/{}'
@@ -56,8 +56,19 @@ def log(message):
     if xbmc:
         xbmc.log(message, xbmc.LOGDEBUG)
 
+def _call_service(url, params):
+    """
+    Call service and unwrap the JSON response to match old load_info behavior
+    """
+    res = api_utils.load_info_from_service(url, params=params, headers=dict(HEADERS))
+    if isinstance(res, dict):
+        if 'error' in res:
+            return res
+        # Return the json content directly to match previous load_info(resp_type='json')
+        return res.get('json') or {}
+    return res
+
 def search_movie(query, year=None, language=None, page=None, settings=None):
-    # type: (Text) -> List[InfoType]
     """
     Search for a movie
 
@@ -77,12 +88,10 @@ def search_movie(query, year=None, language=None, page=None, settings=None):
         params['page'] = page
     if year is not None:
         params['year'] = str(year)
-    api_utils.set_headers(dict(HEADERS))
-    return api_utils.load_info(theurl, params=params)
+    return _call_service(theurl, params)
 
 
 def find_movie_by_external_id(external_id, language=None, settings=None):
-    # type: (Text) -> List[InfoType]
     """
     Find movie based on external ID
 
@@ -95,13 +104,11 @@ def find_movie_by_external_id(external_id, language=None, settings=None):
     theurl = get_base_url(settings).format('find/{}').format(external_id)
     params = _set_params(None, language)
     params['external_source'] = 'imdb_id'
-    api_utils.set_headers(dict(HEADERS))
-    return api_utils.load_info(theurl, params=params)
+    return _call_service(theurl, params)
 
 
 
 def get_movie(mid, language=None, append_to_response=None, settings=None):
-    # type: (Text) -> List[InfoType]
     """
     Get movie details
 
@@ -113,8 +120,7 @@ def get_movie(mid, language=None, append_to_response=None, settings=None):
     """
     log('using movie id of %s to get movie details' % mid)
     theurl = get_base_url(settings).format('movie/{}').format(mid)
-    api_utils.set_headers(dict(HEADERS))
-    return api_utils.load_info(theurl, params=_set_params(append_to_response, language))
+    return _call_service(theurl, params=_set_params(append_to_response, language))
 
 def get_movie_request(mid, language=None, append_to_response=None, settings=None):
     log('using movie id of %s to get movie details' % mid)
@@ -124,7 +130,6 @@ def get_movie_request(mid, language=None, append_to_response=None, settings=None
 
 
 def get_collection(collection_id, language=None, append_to_response=None, settings=None):
-    # type: (Text) -> List[InfoType]
     """
     Get movie collection information
 
@@ -136,12 +141,10 @@ def get_collection(collection_id, language=None, append_to_response=None, settin
     """
     log('using collection id of %s to get collection details' % collection_id)
     theurl = get_base_url(settings).format('collection/{}').format(collection_id)
-    api_utils.set_headers(dict(HEADERS))
-    return api_utils.load_info(theurl, params=_set_params(append_to_response, language))
+    return _call_service(theurl, params=_set_params(append_to_response, language))
 
 
 def get_configuration(settings=None):
-    # type: (Text) -> List[InfoType]
     """
     Get configuration information
 
@@ -149,8 +152,7 @@ def get_configuration(settings=None):
     :return: configuration details or error
     """
     log('getting configuration details')
-    api_utils.set_headers(dict(HEADERS))
-    return api_utils.load_info(get_base_url(settings).format('configuration'), params=TMDB_PARAMS.copy())
+    return _call_service(get_base_url(settings).format('configuration'), params=TMDB_PARAMS.copy())
 
 
 def _set_params(append_to_response, language):
