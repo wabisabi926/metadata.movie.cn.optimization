@@ -20,7 +20,6 @@
 
 from __future__ import absolute_import, unicode_literals
 
-import xbmcaddon
 from . import api_utils
 from . import get_imdb_id
 try:
@@ -40,11 +39,9 @@ HEADERS = (
 
 def get_trakt_url(settings=None):
     try:
+        base = ""
         if settings:
             base = settings.getSettingString('trakt_base_url')
-        else:
-            addon = xbmcaddon.Addon(id='metadata.tmdb.cn.optimization')
-            base = addon.getSetting('trakt_base_url')
         if not base:
             base = 'api.trakt.tv'
         # If the user input doesn't start with api. and the original was api., 

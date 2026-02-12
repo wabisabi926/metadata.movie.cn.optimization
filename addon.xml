@@ -10,6 +10,10 @@
   </requires>
   <extension point="xbmc.metadata.scraper.movies"
              library="python/scraper.py"/>
+  <extension point="xbmc.python.script" library="python/kodi_scraper_thread.py">
+      <provides>executable</provides>
+  </extension>
+  
   <extension point="xbmc.addon.metadata">
     <reuselanguageinvoker>true</reuselanguageinvoker>
     <news>v3.1.4 (2025-12-27)

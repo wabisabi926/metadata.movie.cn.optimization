@@ -135,7 +135,7 @@ msgstr "代理"
 
 msgctxt "#32006"
 msgid "TMDB API Base URL"
-msgstr "TMDB API基础URL"
+msgstr "tmdb api基础url"
 
 msgctxt "#32007"
 msgid "Image Proxy"
@@ -143,7 +143,7 @@ msgstr "图片代理"
 
 msgctxt "#32008"
 msgid "Fanart Base URL"
-msgstr "fanart基础URL"
+msgstr "fanart基础url"
 
 msgctxt "#32009"
 msgid "IMDb Base URL"
@@ -160,4 +160,16 @@ msgstr "将片名拼音首字母写入数据库排序名字段"
 msgctxt "#30022"
 msgid "Write Pinyin Initials to OriginalTitle"
 msgstr "将片名拼音首字母写入数据库原始片名字段"
+
+msgctxt "#33000"
+msgid "Multi-thread Scraping"
+msgstr "多线程刮削"
+
+msgctxt "#33001"
+msgid "Run Multi-thread Scraper Tool"
+msgstr "运行多线程刮削工具"
+
+msgctxt "#33002"
+msgid "Thread Count"
+msgstr "线程数"
 

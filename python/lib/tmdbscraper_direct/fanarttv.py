@@ -1,8 +1,6 @@
 from . import api_utils
-try:
-    from urllib import quote
-except ImportError: # py2 / py3
-    from urllib.parse import quote
+from urllib.parse import quote
+
 
 API_KEY = '384afe262ee0962545a752ff340e3ce4'
 
@@ -36,40 +34,13 @@ HEADERS = (
     ('api-key', API_KEY),
 )
 
-
-def get_movie_requests(uniqueids, clientkey, set_tmdbid, settings=None):
+def get_details(uniqueids, clientkey, language, set_tmdbid, settings=None):
     media_id = _get_mediaid(uniqueids)
     if not media_id:
-        return []
-    
-    headers = dict(HEADERS)
-    if clientkey:
-        headers['client-key'] = clientkey
-    
-    api_url = get_api_url(settings)
-    reqs = []
-    reqs.append({
-        'url': api_url.format(media_id),
-        'headers': headers,
-        'type': 'fanart_movie',
-        'id': media_id
-    })
-    
-    if set_tmdbid:
-        reqs.append({
-            'url': api_url.format(set_tmdbid),
-            'headers': headers,
-            'type': 'fanart_collection',
-            'id': set_tmdbid
-        })
-        
-    return reqs
+        return {}
 
-
-def parse_movie_response(responses, language, settings=None):
-    movie_data = responses.get('fanart_movie')
-    movieset_data = responses.get('fanart_collection')
-    
+    movie_data = _get_data(media_id, clientkey, settings)
+    movieset_data = _get_data(set_tmdbid, clientkey, settings) if set_tmdbid else None
     if not movie_data and not movieset_data:
         return {}
 
@@ -86,30 +57,6 @@ def parse_movie_response(responses, language, settings=None):
 
     return {'available_art': available_art}
 
-
-def get_details(uniqueids, clientkey, language, set_tmdbid, settings=None):
-    media_id = _get_mediaid(uniqueids)
-    if not media_id:
-        return {}
-
-    movie_data = _get_data(media_id, clientkey, settings)
-    movieset_data = _get_data(set_tmdbid, clientkey, settings) if set_tmdbid else None
-    if not movie_data and not movieset_data:
-        return {}
-
-    movie_art = {}
-    movieset_art = {}
-    if movie_data:
-        movie_art = _parse_data(movie_data, language)
-    if movieset_data:
-        movieset_art = _parse_data(movieset_data, language)
-        movieset_art = {'set.' + key: value for key, value in movieset_art.items()}
-
-    available_art = movie_art
-    available_art.update(movieset_art)
-
-    return {'available_art': available_art}
-
 def _get_mediaid(uniqueids):
     for source in ('tmdb', 'imdb', 'unknown'):
         if source in uniqueids:
@@ -119,9 +66,12 @@ def _get_data(media_id, clientkey, settings=None):
     headers = dict(HEADERS)
     if clientkey:
         headers['client-key'] = clientkey
-    api_utils.set_headers(headers)
     fanarttv_url = get_api_url(settings).format(media_id)
-    return api_utils.load_info(fanarttv_url, default={})
+    try:
+        resp = api_utils.get(fanarttv_url, headers=headers).json()
+        return resp
+    except:
+        return {}
 
 def _parse_data(data, language, language_fallback='en', settings=None):
     try:

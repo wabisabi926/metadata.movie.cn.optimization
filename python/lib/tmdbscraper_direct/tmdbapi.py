@@ -1,22 +1,4 @@
 # -*- coding: UTF-8 -*-
-#
-# Copyright (C) 2020, Team Kodi
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-# pylint: disable=missing-docstring
-
-"""Functions to interact with TMDb API."""
 
 import unicodedata
 from . import api_utils
@@ -57,7 +39,6 @@ def log(message):
         xbmc.log(message, xbmc.LOGDEBUG)
 
 def search_movie(query, year=None, language=None, page=None, settings=None):
-    # type: (Text) -> List[InfoType]
     """
     Search for a movie
 
@@ -77,12 +58,10 @@ def search_movie(query, year=None, language=None, page=None, settings=None):
         params['page'] = page
     if year is not None:
         params['year'] = str(year)
-    api_utils.set_headers(dict(HEADERS))
-    return api_utils.load_info(theurl, params=params)
+    return api_utils.get(theurl, params=params, headers=dict(HEADERS)).json()
 
 
 def find_movie_by_external_id(external_id, language=None, settings=None):
-    # type: (Text) -> List[InfoType]
     """
     Find movie based on external ID
 
@@ -95,13 +74,11 @@ def find_movie_by_external_id(external_id, language=None, settings=None):
     theurl = get_base_url(settings).format('find/{}').format(external_id)
     params = _set_params(None, language)
     params['external_source'] = 'imdb_id'
-    api_utils.set_headers(dict(HEADERS))
-    return api_utils.load_info(theurl, params=params)
+    return api_utils.get(theurl, params=params, headers=dict(HEADERS)).json()
 
 
 
 def get_movie(mid, language=None, append_to_response=None, settings=None):
-    # type: (Text) -> List[InfoType]
     """
     Get movie details
 
@@ -113,8 +90,7 @@ def get_movie(mid, language=None, append_to_response=None, settings=None):
     """
     log('using movie id of %s to get movie details' % mid)
     theurl = get_base_url(settings).format('movie/{}').format(mid)
-    api_utils.set_headers(dict(HEADERS))
-    return api_utils.load_info(theurl, params=_set_params(append_to_response, language))
+    return api_utils.get(theurl, params=_set_params(append_to_response, language), headers=dict(HEADERS)).json()
 
 def get_movie_request(mid, language=None, append_to_response=None, settings=None):
     log('using movie id of %s to get movie details' % mid)
@@ -124,7 +100,6 @@ def get_movie_request(mid, language=None, append_to_response=None, settings=None
 
 
 def get_collection(collection_id, language=None, append_to_response=None, settings=None):
-    # type: (Text) -> List[InfoType]
     """
     Get movie collection information
 
@@ -136,12 +111,10 @@ def get_collection(collection_id, language=None, append_to_response=None, settin
     """
     log('using collection id of %s to get collection details' % collection_id)
     theurl = get_base_url(settings).format('collection/{}').format(collection_id)
-    api_utils.set_headers(dict(HEADERS))
-    return api_utils.load_info(theurl, params=_set_params(append_to_response, language))
+    return api_utils.get(theurl, params=_set_params(append_to_response, language), headers=dict(HEADERS)).json()
 
 
 def get_configuration(settings=None):
-    # type: (Text) -> List[InfoType]
     """
     Get configuration information
 
@@ -149,8 +122,7 @@ def get_configuration(settings=None):
     :return: configuration details or error
     """
     log('getting configuration details')
-    api_utils.set_headers(dict(HEADERS))
-    return api_utils.load_info(get_base_url(settings).format('configuration'), params=TMDB_PARAMS.copy())
+    return api_utils.get(get_base_url(settings).format('configuration'), params=TMDB_PARAMS.copy(), headers=dict(HEADERS)).json()
 
 
 def _set_params(append_to_response, language):

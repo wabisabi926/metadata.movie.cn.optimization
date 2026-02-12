@@ -349,8 +349,10 @@ def run():
         api_utils.set_dns_settings(dns_settings)
         action = params["action"]
         if action == 'find' and 'title' in params:
+            xbmc.log(f"Searching for movie: {params['title']} ({params.get('year', 'N/A')})", xbmc.LOGINFO)
             search_for_movie(params["title"], params.get("year"), params['handle'], settings)
         elif action == 'getdetails' and ('url' in params or 'uniqueIDs' in params):
+            xbmc.log(f"Getting details for: {params.get('url') or params.get('uniqueIDs')}", xbmc.LOGINFO)
             unique_ids = parse_lookup_string(params.get('uniqueIDs') or params.get('url'))
             enddir = not get_details(unique_ids, params['handle'], settings, fail_silently='uniqueIDs' in params)
         elif action == 'NfoUrl' and 'nfo' in params:

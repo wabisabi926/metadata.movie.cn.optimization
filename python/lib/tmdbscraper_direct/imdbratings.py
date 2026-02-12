@@ -1,22 +1,4 @@
 # -*- coding: UTF-8 -*-
-#
-# Copyright (C) 2020, Team Kodi
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#
-# IMDb ratings based on code in metadata.themoviedb.org.python by Team Kodi
-# pylint: disable=missing-docstring
 
 import json
 import re
@@ -49,18 +31,6 @@ HEADERS = (
     ('Accept', 'application/json'),
 )
 
-def get_movie_requests(uniqueids, settings=None):
-    imdb_id = get_imdb_id(uniqueids)
-    if not imdb_id:
-        return []
-    
-    return [{
-        'url': get_imdb_url(settings).format(imdb_id),
-        'headers': dict(HEADERS),
-        'type': 'imdb_rating',
-        'id': imdb_id,
-        'resp_type': 'text'
-    }]
 
 def parse_movie_response(responses):
     response = responses.get('imdb_rating')
@@ -79,8 +49,10 @@ def get_details(uniqueids, settings=None):
     return _assemble_imdb_result(votes, rating, top250)
 
 def _get_ratinginfo(imdb_id, settings=None):
-    api_utils.set_headers(dict(HEADERS))
-    response = api_utils.load_info(get_imdb_url(settings).format(imdb_id), default = '', resp_type='text')
+    try:
+        response = api_utils.get(get_imdb_url(settings).format(imdb_id), headers=dict(HEADERS)).text
+    except:
+        response = ''
     return _parse_imdb_result(response)
 
 def _assemble_imdb_result(votes, rating, top250):
