@@ -38,7 +38,7 @@ def log(message):
     if xbmc:
         xbmc.log(message, xbmc.LOGDEBUG)
 
-def search_movie(query, year=None, language=None, page=None, settings=None):
+def search_movie(query, year=None, language=None, page=None, settings=None, include_adult=False):
     """
     Search for a movie
 
@@ -54,6 +54,11 @@ def search_movie(query, year=None, language=None, page=None, settings=None):
     theurl = get_base_url(settings).format('search/movie')
     params = _set_params(None, language)
     params['query'] = query
+    if include_adult:
+        params['include_adult'] = 'true'
+    else:
+        params['include_adult'] = 'false'
+        
     if page is not None:
         params['page'] = page
     if year is not None:

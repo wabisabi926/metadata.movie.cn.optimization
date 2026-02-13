@@ -6,7 +6,7 @@ from . import pinyin
 import json
 
 class TMDBMovieScraper(object):
-    def __init__(self, url_settings, language, certification_country, search_language=""):
+    def __init__(self, url_settings, language, certification_country, search_language="", include_adult=False):
         self.url_settings = url_settings
         self.language = language
         self.certification_country = certification_country
@@ -14,6 +14,7 @@ class TMDBMovieScraper(object):
             self.search_language = language
         else:
             self.search_language = search_language
+        self.include_adult = include_adult
         self._urls = None
 
     @property
@@ -53,7 +54,7 @@ class TMDBMovieScraper(object):
                     return result
                 result = result.get('movie_results')
         else:
-            response = tmdbapi.search_movie(query=title, year=year, language=self.search_language, settings=self.url_settings)
+            response = tmdbapi.search_movie(query=title, year=year, language=self.search_language, settings=self.url_settings, include_adult=self.include_adult)
             if 'error' in response:
                 return response
             result = response['results']
@@ -61,7 +62,7 @@ class TMDBMovieScraper(object):
             if response['total_pages'] > 1:
                 bests = [item for item in result if is_best(item) and item.get('popularity',0) > 5]
                 if not bests:
-                    response = tmdbapi.search_movie(query=title, year=year, language=self.language, page=2, settings=self.url_settings)
+                    response = tmdbapi.search_movie(query=title, year=year, language=self.language, page=2, settings=self.url_settings, include_adult=self.include_adult)
                     if not 'error' in response:
                         result += response['results']
         urls = self.urls
@@ -114,6 +115,9 @@ class TMDBMovieScraper(object):
 
         if not movie or movie.get('error'):
             return movie
+            
+        if not self.include_adult and movie.get('adult'):
+            return {'error': 'Adult content is disabled'}
 
         movie['images'] = movie_fallback.get('images', {})
 

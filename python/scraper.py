@@ -20,6 +20,7 @@ from scraper_config import configure_scraped_details, PathSpecificSettings, \
 
 ADDON_SETTINGS = xbmcaddon.Addon()
 ID = ADDON_SETTINGS.getAddonInfo('id')
+INCLUDE_ADULT_CONTENT = False
 
 def log(msg, level=xbmc.LOGDEBUG):
     xbmc.log(msg='[{addon}]: {msg}'.format(addon=ID, msg=msg), level=level)
@@ -28,7 +29,7 @@ def get_tmdb_scraper(settings):
     language = settings.getSettingString('language')
     certcountry = settings.getSettingString('tmdbcertcountry')
     search_language = settings.getSettingString('searchlanguage')
-    return TMDBMovieScraper(settings, language, certcountry, search_language)
+    return TMDBMovieScraper(settings, language, certcountry, search_language, INCLUDE_ADULT_CONTENT)
 
 def get_dns_settings(settings):
     dns_map = {}

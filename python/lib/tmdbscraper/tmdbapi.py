@@ -68,7 +68,7 @@ def _call_service(url, params):
         return res.get('json') or {}
     return res
 
-def search_movie(query, year=None, language=None, page=None, settings=None):
+def search_movie(query, year=None, language=None, page=None, settings=None, include_adult=False):
     """
     Search for a movie
 
@@ -77,6 +77,7 @@ def search_movie(query, year=None, language=None, page=None, settings=None):
     :param language: the language filter for TMDb (optional)
     :param page: the results page to return (optional)
     :param settings: addon settings object (optional)
+    :param include_adult: whether to include adult content (optional)
     :return: a list with found movies
     """
     query = unicodedata.normalize('NFC', query)
@@ -84,6 +85,11 @@ def search_movie(query, year=None, language=None, page=None, settings=None):
     theurl = get_base_url(settings).format('search/movie')
     params = _set_params(None, language)
     params['query'] = query
+    if include_adult:
+        params['include_adult'] = 'true'
+    else:
+        params['include_adult'] = 'false'
+        
     if page is not None:
         params['page'] = page
     if year is not None:

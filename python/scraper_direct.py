@@ -18,6 +18,8 @@ from scraper_datahelper import combine_scraped_details_info_and_ratings, \
     combine_scraped_details_available_artwork
 from scraper_config import configure_scraped_details, configure_tmdb_artwork, is_fanarttv_configured
 
+INCLUDE_ADULT_CONTENT = False
+
 class ScraperRunner(object):
     def __init__(self, settings):
         
@@ -45,7 +47,8 @@ class ScraperRunner(object):
             url_settings=self.settings,
             language=language,
             certification_country=cert_country,
-            search_language=search_language
+            search_language=search_language,
+            include_adult=INCLUDE_ADULT_CONTENT
         )
 
     def search(self, title, year=None):

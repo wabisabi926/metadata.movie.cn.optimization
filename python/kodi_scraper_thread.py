@@ -980,7 +980,7 @@ class KodiScraperSimulation:
                 except Exception as e:
                     xbmc.log(f"Search Error: {e}", xbmc.LOGERROR)
 
-            if not details:
+            if not details or "error" in details:
                 xbmc.log("Failed to get details", xbmc.LOGERROR)
                 return None
             
