@@ -21,21 +21,12 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 if script_dir not in sys.path:
     sys.path.append(script_dir)
 
-try:
-    from scraper_direct import ScraperRunner
-except ImportError:
-    try:
-        from python.scraper_direct import ScraperRunner
-    except ImportError:
-        xbmc.log("Failed to import scraper_runner. ensure scraper_direct.py exists.", xbmc.LOGERROR)
-        ScraperRunner = None
 
-try:
-    from lib.tmdbscraper_direct import dns_override
-except ImportError:
-    xbmc.log("Failed to import lib.tmdbscraper_direct.dns_override", xbmc.LOGWARNING)
-    dns_override = None
+from scraper_direct import ScraperRunner
+from lib.tmdbscraper_direct import dns_override
 
+def log(message, level=xbmc.LOGDEBUG):
+    xbmc.log(f"[TMDB Thread] {message}", level)
 
 class SettingsProxy:
     def __init__(self, base_settings, overrides):
@@ -75,7 +66,7 @@ class KodiDatabase:
             self.conn = sqlite3.connect(self.db_path)
             self.conn.row_factory = sqlite3.Row
         except Exception as e:
-            xbmc.log(f"DB Connect Error: {e}", xbmc.LOGERROR)
+            log(f"DB Connect Error: {e}", xbmc.LOGERROR)
 
     def close(self):
         if self.conn:
@@ -172,7 +163,7 @@ class KodiDatabase:
                     'exclude': bool(row['exclude'])
                 }
         except Exception as e:
-            xbmc.log(f"Error fetching all paths: {e}", xbmc.LOGERROR)
+            log(f"Error fetching all paths: {e}", xbmc.LOGERROR)
             
         return paths_map
 
@@ -280,7 +271,7 @@ class KodiDatabase:
                 id_movie
             ))
         except Exception as e:
-            xbmc.log(f"DB Error updating movie: {e}", xbmc.LOGERROR)
+            log(f"DB Error updating movie: {e}", xbmc.LOGERROR)
         
         cur.execute("DELETE FROM genre_link WHERE media_id=? AND media_type='movie'", (id_movie,))
         for g in info.get('genre', []): self.add_link('genre', g, id_movie, 'movie')
@@ -512,7 +503,7 @@ class KodiScraperSimulation:
         """
         Loads all scraped movie file paths into memory for fast lookup.
         """
-        xbmc.log("Loading scraped movies from library...", xbmc.LOGINFO)
+        log("Loading scraped movies from library...", xbmc.LOGINFO)
         result = self.execute_jsonrpc("VideoLibrary.GetMovies", {"properties": ["file"]})
         
         if "result" in result and "movies" in result["result"]:
@@ -521,7 +512,7 @@ class KodiScraperSimulation:
                 if f:
                     self.scraped_files.add(self.normalize_path(f))
         
-        xbmc.log(f"Loaded {len(self.scraped_files)} scraped movies.", xbmc.LOGINFO)
+        log(f"Loaded {len(self.scraped_files)} scraped movies.", xbmc.LOGINFO)
         self.loaded_scraped_status = True
 
     def load_path_cache(self):
@@ -530,7 +521,7 @@ class KodiScraperSimulation:
         """
         if self.db:
             self.path_cache = self.db.get_all_paths()
-            xbmc.log(f"Loaded {len(self.path_cache)} path configurations.", xbmc.LOGINFO)
+            log(f"Loaded {len(self.path_cache)} path configurations.", xbmc.LOGINFO)
 
     def get_scraper_roots(self):
         """
@@ -920,7 +911,59 @@ class KodiScraperSimulation:
             
         return None, None
 
-    def process_file(self, file_path, settings, video_files_in_dir=1):
+    def deepseek_pre_clean_name(self, raw_name):
+        # Pre-clean filename for DeepSeek: Remove known Kodi ID patterns
+        # Matches variations: [tmdb=123], [tmdbid=123], [tmdb-id=123], [tmdb_id=123] etc.
+        ds_filename = re.sub(r'[\{\[](?:tmdb|imdb)(?:[._-]?id)?\s*[-=]\s*(\w+)[\}\]]', ' ', raw_name, flags=re.IGNORECASE | re.ASCII)
+        ds_filename = re.sub(r'\s+', ' ', ds_filename).strip()
+        return ds_filename
+
+    def extract_info_via_deepseek(self, raw_name, deepseek_extractor):
+        if not deepseek_extractor:
+            return None, None, None
+
+        title = None
+        year = None
+        english_title = None
+
+        try:
+            ds_filename = self.deepseek_pre_clean_name(raw_name)
+
+            # Use cleaned filename for context
+            ds_data = deepseek_extractor.extract(ds_filename)
+            if ds_data:
+                # Support multiple key variations for robustness
+                t_cn = ds_data.get('cn') or ds_data.get('chinese') or ds_data.get('zh')
+                if t_cn == "中文名": t_cn = None # Handle case where model fails and returns prompt keys
+                
+                t_en = ds_data.get('en') or ds_data.get('english') or ds_data.get('englist')
+                if t_en == "英文名": t_en = None # Handle case where model fails and returns prompt keys
+                
+                # Replace symbols with spaces in titles
+                if t_cn: t_cn = re.sub(r'[._\-\[\]]', ' ', t_cn).strip()
+                if t_cn: t_cn = re.sub(r'\s+', ' ', t_cn).strip()
+                if t_en: t_en = re.sub(r'[._\-\[\]]', ' ', t_en).strip()
+                if t_en: t_en = re.sub(r'\s+', ' ', t_en).strip()
+                
+                y_ds = ds_data.get('year') or ds_data.get('yr')
+                if y_ds == "年份": y_ds = None # Handle case where model fails and returns prompt keys
+                
+                new_title = t_cn if t_cn else t_en
+                if new_title:
+                    title = new_title
+                    english_title = t_en
+                if y_ds:
+                    try:
+                        year = int(y_ds)
+                    except Exception as e:
+                        year = None
+                log(f"DeepSeek Extracted: '{raw_name}' -> zh: '{title}', year: '{year}', en: '{english_title}' ", xbmc.LOGINFO)
+        except Exception as e:
+            log(f"DeepSeek Process Error: {e}", xbmc.LOGERROR)
+            
+        return title, year, english_title
+
+    def process_file(self, file_path, settings, video_files_in_dir=1, deepseek_extractor=None):
         try:
             # Prepare directory listing once for all local checks (Optimization)
             dir_path = os.path.dirname(file_path)
@@ -933,55 +976,65 @@ class KodiScraperSimulation:
             normalized_path = file_path.replace("\\", "/")
             raw_name = urllib.parse.unquote(normalized_path.split("/")[-1])
             title, year, unique_id = self.clean_string(raw_name)
-            
             if not year:
                 year = None
             
-            xbmc.log(f"[PROCESSING] {urllib.parse.unquote(file_path)} -> '{title}' ({year})", xbmc.LOGINFO)
-            
+            log(f"Processing: {file_path} | Title: {title} | Year: {year} | ID: {unique_id}", xbmc.LOGINFO)
             runner = ScraperRunner(settings)
             details = None
-            
             # 1. NFO Check
             nfo_details, nfo_ids = self.scan_local_nfo(file_path, video_files_in_dir, files_map)
             if nfo_details:
-                xbmc.log(f"Found Full NFO for {file_path}", xbmc.LOGINFO)
+                log(f"Found Full NFO for {file_path}", xbmc.LOGINFO)
                 details = nfo_details
             elif nfo_ids:
-                xbmc.log(f"Found NFO IDs: {nfo_ids}", xbmc.LOGINFO)
+                log(f"Found NFO IDs: {nfo_ids}", xbmc.LOGINFO)
                 try:
                     details = runner.get_details(nfo_ids)
                 except Exception as e:
-                    xbmc.log(f"GetDetails(NFO) Error: {e}", xbmc.LOGERROR)
+                    log(f"GetDetails(NFO) Error: {e}", xbmc.LOGERROR)
 
             # 2. Filename ID
             if not details and unique_id:
                 id_type, id_val = unique_id
-                xbmc.log(f"ID found in filename: {id_type}={id_val}. Attempting direct details lookup.", xbmc.LOGINFO)
+                log(f"ID found in filename: {id_type}={id_val}. Attempting direct details lookup.", xbmc.LOGINFO)
                 try:
                     details = runner.get_details({id_type: id_val})
                 except Exception as e:
-                    xbmc.log(f"GetDetails(Direct) Error: {e}", xbmc.LOGERROR)
+                    log(f"GetDetails(Direct) Error: {e}", xbmc.LOGERROR)
 
             # 3. Search
             if not details:
                 try:
+                    # DeepSeek Extraction
+                    english_title_from_deepseek = None
+                    if deepseek_extractor:
+                        ds_title, ds_year, ds_english = self.extract_info_via_deepseek(raw_name, deepseek_extractor)
+                        if ds_title:
+                            title = ds_title
+                        if ds_year:
+                            year = ds_year
+                        if ds_english:
+                            english_title_from_deepseek = ds_english
                     results = runner.search(title, year)
+                    if not results and english_title_from_deepseek and english_title_from_deepseek != title:
+                        log(f"No results for original title. Trying DeepSeek English title: {english_title_from_deepseek}", xbmc.LOGINFO)
+                        results = runner.search(english_title_from_deepseek, year)
                     if results:
                         match = results[0]
-                        xbmc.log(f"Match found: {match.get('title')} (ID: {match.get('id')})", xbmc.LOGINFO)
+                        log(f"Match found: {match.get('title')} (ID: {match.get('id')})", xbmc.LOGINFO)
                         unique_ids = {'tmdb': str(match.get('id'))}
                         try:
                             details = runner.get_details(unique_ids)
                         except Exception as e:
-                            xbmc.log(f"GetDetails Error: {e}", xbmc.LOGERROR)
+                            log(f"GetDetails Error: {e}", xbmc.LOGERROR)
                     else:
-                        xbmc.log(f"No results found for {title}", xbmc.LOGWARNING)
+                        log(f"No results found for {title}", xbmc.LOGWARNING)
                 except Exception as e:
-                    xbmc.log(f"Search Error: {e}", xbmc.LOGERROR)
+                    log(f"Search Error: {e}", xbmc.LOGERROR)
 
             if not details or "error" in details:
-                xbmc.log("Failed to get details", xbmc.LOGERROR)
+                log(f"Failed to get details for {title} {year} {unique_id} {english_title_from_deepseek} {file_path}", xbmc.LOGERROR)
                 return None
             
             # 4. Local Artwork Overlay
@@ -989,7 +1042,7 @@ class KodiScraperSimulation:
 
             return details
         except Exception:
-            xbmc.log(f"Fatal Error in process_file for {file_path}: {traceback.format_exc()}", xbmc.LOGERROR)
+            log(f"Fatal Error in process_file for {file_path}: {traceback.format_exc()}", xbmc.LOGERROR)
             return None
 
     def check_should_stop(self):
@@ -1031,19 +1084,19 @@ class KodiScraperSimulation:
                             try: year = str(info_obj.get('premiered'))[:4]
                             except: pass
                         scraped_title = f"{info_obj.get('title', 'Unknown')}({year})"
-                        xbmc.log(f"Saved to DB: {scraped_title}", xbmc.LOGINFO)
+                        log(f"Saved to DB: {scraped_title}", xbmc.LOGINFO)
                     except Exception as e:
-                        xbmc.log(f"DB Save Error for {f_path}: {e}", xbmc.LOGERROR)
+                        log(f"DB Save Error for {f_path}: {e}", xbmc.LOGERROR)
             else:
                 self.stats_failed += 1
-                xbmc.log(f"Task Failed or Returned None for {f_path}", xbmc.LOGWARNING)
+                log(f"Task Failed or Returned None for {f_path}", xbmc.LOGWARNING)
             f_dir = urllib.parse.unquote(os.path.dirname(f_path))
             f_name = urllib.parse.unquote(os.path.basename(f_path).split(".")[0])
             message = f"目录: {f_dir}\n {f_name}-> {scraped_title}\n 总计(成功: {self.stats_success}, 失败: {self.stats_failed})"
             if self.pDialog:
                 self.pDialog.update(int(self.deal_process*100), message)
 
-    def scan_path(self, path, path_total_process):
+    def scan_path(self, path, path_total_process, deepseek_extractor=None):
         """
         Scans a path using xbmcvfs (supports dav://, smb://, etc.)
         """
@@ -1063,22 +1116,22 @@ class KodiScraperSimulation:
         settings = SettingsProxy(ADDON_SETTINGS, overrides)
         
         if is_excluded:
-            xbmc.log(f"[SKIPPING Directory] {path}: Path Excluded", xbmc.LOGINFO)
+            log(f"SKIPPING Directory {path}: Path Excluded", xbmc.LOGINFO)
             return
         if is_no_update:
-            xbmc.log(f"[SKIPPING Directory] {path}: Path noUpdate", xbmc.LOGINFO)
+            log(f"SKIPPING Directory {path}: Path noUpdate", xbmc.LOGINFO)
             return
 
         try:
             dirs, files = xbmcvfs.listdir(path)
         except Exception:
-            xbmc.log(f"Error listing dir: {path}", xbmc.LOGERROR)
+            log(f"Error listing dir: {path}", xbmc.LOGERROR)
             return
             
         # Kodi Logic: Check for .nomedia file
         # If present, recursively skip this folder and all subfolders (Kodi behavior)
         if ".nomedia" in files:
-            xbmc.log(f"[SKIPPING] .nomedia found in {path}", xbmc.LOGINFO)
+            log(f"SKIPPING Directory {path}: .nomedia found", xbmc.LOGINFO)
             self.deal_process += path_total_process
             return
 
@@ -1105,7 +1158,6 @@ class KodiScraperSimulation:
                 
                 # Check scraped
                 if self.is_video_scraped(full_path):
-                    # xbmc.log(f"[SKIPPING] Already scraped: {full_path}", xbmc.LOGINFO)
                     self.deal_process += item_weight_process
                     if self.pDialog:
                         self.pDialog.update(int(self.deal_process * 100))
@@ -1122,13 +1174,13 @@ class KodiScraperSimulation:
                 if self.check_should_stop(): break
 
                 # Submit new task
-                future = self.executor.submit(self.process_file, full_path, settings, video_files_in_dir)
+                future = self.executor.submit(self.process_file, full_path, settings, video_files_in_dir, deepseek_extractor=deepseek_extractor)
                 self.running_futures.add(future)
                 self.future_map[future] = (full_path, settings, item_weight_process)
         
         # Process Directories
         for d in dirs:
-            self.scan_path(path + d + "/", item_weight_process)
+            self.scan_path(path + d + "/", item_weight_process, deepseek_extractor)
 
 
 
@@ -1137,7 +1189,7 @@ class KodiScraperSimulation:
         Trigger a library refresh using the method observed in plugin.video.emby.vfs.
         This forces Kodi to re-read the database and update widgets/views.
         """
-        xbmc.log("[TMDB CN] Triggering Library Refresh...", xbmc.LOGINFO)
+        log("Triggering Library Refresh...", xbmc.LOGINFO)
         
         # 1. VideoLibrary.Scan with a dummy directory.
         # This helps update global states/widgets as seen in Emby Next Gen plugin
@@ -1177,7 +1229,7 @@ class KodiScraperSimulation:
                     if key:
                         overrides[key] = val if val is not None else ""
         except Exception as e:
-            xbmc.log(f"Error parsing path settings XML: {e}", xbmc.LOGWARNING)
+            log(f"Error parsing path settings XML: {e}", xbmc.LOGWARNING)
         return overrides
 
     def _apply_dns_settings(self, settings):
@@ -1214,7 +1266,7 @@ class KodiScraperSimulation:
         """
         Main entry point.
         """
-        xbmc.log("Starting Scan...", xbmc.LOGINFO)
+        log("Starting Scan...", xbmc.LOGINFO)
         icon_path = ADDON_SETTINGS.getAddonInfo('icon')
         
         self.pDialog = xbmcgui.DialogProgress()
@@ -1224,7 +1276,7 @@ class KodiScraperSimulation:
         try:
             # Initialize Thread Pool
             self.executor = ThreadPoolExecutor(max_workers=self.MAX_WORKERS)
-            xbmc.log(f"Initialized ThreadPoolExecutor with {self.MAX_WORKERS} workers.", xbmc.LOGINFO)
+            log(f"Initialized ThreadPoolExecutor with {self.MAX_WORKERS} workers.", xbmc.LOGINFO)
             self.load_scraped_files()
 
             # Initialize DB
@@ -1236,12 +1288,12 @@ class KodiScraperSimulation:
                 self.load_path_cache()
             else:
                 self.db = None
-                xbmc.log("No Kodi Database found. Simulation only.", xbmc.LOGWARNING)
+                log("No Kodi Database found. Simulation only.", xbmc.LOGWARNING)
             
             # Get start points
             paths = self.get_scraper_roots()
             if not paths:
-                xbmc.log("No sources found bound to metadata.tmdb.cn.optimization", xbmc.LOGINFO)
+                log("No sources found bound to metadata.tmdb.cn.optimization", xbmc.LOGINFO)
                 if self.pDialog:
                     self.pDialog.update(100, "没有源绑定到 metadata.tmdb.cn.optimization.")
                     time.sleep(1)
@@ -1250,14 +1302,35 @@ class KodiScraperSimulation:
                 for path in paths:
                     if self.check_should_stop(): raise KeyboardInterrupt()
                         
-                    xbmc.log(f"Processing Root Path: {path}", xbmc.LOGINFO)
+                    log(f"Processing Root Path: {path}", xbmc.LOGINFO)
                     
                     # Apply DNS overrides based on root path settings
                     overrides, _, _ = self.resolve_path_attributes(path)
                     path_settings = SettingsProxy(ADDON_SETTINGS, overrides)
                     self._apply_dns_settings(path_settings)
+                    
+                    # Initialize DeepSeek Extractor for this path
+                    deepseek_extractor = None
+                    if path_settings.getSettingBool('enable_deepseek'):
+                        try:
+                            from lib.deepseek_extractor import DeepSeekExtractor
+                            key_file = path_settings.getSettingString('deepseek_key_file')
+                            if key_file and xbmcvfs.exists(key_file):
+                                with xbmcvfs.File(key_file) as f:
+                                    ds_key = f.read().strip()
+                                if ds_key:
+                                    prompt_template = 'Parse filename to JSON: {"cn":"中文名","en":"英文名","year":"年份"}'
+                                    deepseek_extractor = DeepSeekExtractor(
+                                        ds_key,
+                                        'https://api.deepseek.com',
+                                        path_settings.getSettingString('deepseek_model'),
+                                        prompt_template
+                                    )
+                                    log(f"DeepSeek initialized for path: {path}", xbmc.LOGINFO)
+                        except Exception as e:
+                            log(f"DeepSeek Init Error: {e}", xbmc.LOGERROR)
 
-                    self.scan_path(path, path_total_process)
+                    self.scan_path(path, path_total_process, deepseek_extractor)
 
                 # Flush final remaining futures
                 while self.running_futures and not self.check_should_stop():
@@ -1265,9 +1338,9 @@ class KodiScraperSimulation:
                      self.handle_finished_futures(done)
                     
         except KeyboardInterrupt:
-            xbmc.log("Scan cancelled by user.", xbmc.LOGINFO)
+            log("Scan cancelled by user.", xbmc.LOGINFO)
         except Exception as e:
-            xbmc.log(f"Scan Process Error: {traceback.format_exc()}", xbmc.LOGERROR)
+            log(f"Scan Process Error: {traceback.format_exc()}", xbmc.LOGERROR)
             xbmcgui.Dialog().notification("TMDB CN Optimization", f"扫描出错: {e}", icon_path, 4000)
         finally:
             if self.executor:
@@ -1284,7 +1357,7 @@ class KodiScraperSimulation:
             self.trigger_library_refresh()
             msg = f"多线程刮削: {self.stats_processed} | 成功: {self.stats_success} | 失败: {self.stats_failed}"
             xbmcgui.Dialog().notification("TMDB CN Optimization", msg, icon_path, 5000)
-            xbmc.log(f"[SUMMARY] {msg.replace(chr(10), ' ')}", xbmc.LOGINFO)
+            log(f"[SUMMARY] {msg.replace(chr(10), ' ')}", xbmc.LOGINFO)
 
 if __name__ == '__main__':
     sim = KodiScraperSimulation()

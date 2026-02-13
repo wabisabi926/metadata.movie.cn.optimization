@@ -394,6 +394,34 @@
 						<popup>true</popup>
 					</control>
 				</setting>
+				<setting id="enable_deepseek" type="boolean" label="33010" help="">
+					<level>0</level>
+					<default>false</default>
+					<control type="toggle"/>
+				</setting>
+				<setting id="deepseek_model" type="string" label="33013" help="">
+					<level>0</level>
+					<default>deepseek-chat</default>
+					<constraints>
+						<options>
+							<option>deepseek-chat</option>
+							<option>deepseek-reasoner</option>
+						</options>
+					</constraints>
+					<control type="list" format="string">
+						<heading>33013</heading>
+					</control>
+				</setting>
+				<setting id="deepseek_key_file" type="path" label="33015" help="">
+					<level>0</level>
+					<default></default>
+					<constraints>
+						<allowempty>true</allowempty>
+					</constraints>
+					<control type="button" format="file">
+						<heading>33015</heading>
+					</control>
+				</setting>
 			</group>
 		</category>
 		<category id="proxy_custom" label="32005">

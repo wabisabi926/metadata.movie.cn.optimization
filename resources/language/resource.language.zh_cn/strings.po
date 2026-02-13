@@ -177,3 +177,16 @@ msgctxt "#33002"
 msgid "Thread Count"
 msgstr "线程数"
 
+msgctxt "#33010"
+msgid "Enable DeepSeek"
+msgstr "使用DeepSeek提取电影名/年份"
+
+msgctxt "#33013"
+msgid "Model"
+msgstr "DeepSeek模型 (Model)"
+
+msgctxt "#33015"
+msgid "API Key File"
+msgstr "DeepSeek API Key 文件"
+
+

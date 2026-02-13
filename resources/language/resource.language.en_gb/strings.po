@@ -111,3 +111,27 @@ msgstr ""
 msgctxt "#30999"
 msgid "Fanart.tv"
 msgstr "Fanart.tv"
+
+msgctxt "#33000"
+msgid "Multi-thread Scraping"
+msgstr ""
+
+msgctxt "#33001"
+msgid "Run Multi-thread Scraper Tool"
+msgstr ""
+
+msgctxt "#33002"
+msgid "Thread Count"
+msgstr ""
+
+msgctxt "#33010"
+msgid "Enable DeepSeek"
+msgstr ""
+
+msgctxt "#33013"
+msgid "Model"
+msgstr ""
+
+msgctxt "#33015"
+msgid "API Key File"
+msgstr ""

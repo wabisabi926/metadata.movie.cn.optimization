@@ -34,9 +34,8 @@ def get_base_url(settings=None):
     except:
         return 'https://api.tmdb.org/3/{}'
 
-def log(message):
-    if xbmc:
-        xbmc.log(message, xbmc.LOGDEBUG)
+def log(message, level=xbmc.LOGDEBUG):
+    xbmc.log(f"[TMDB Thread] {message}", level)
 
 def search_movie(query, year=None, language=None, page=None, settings=None, include_adult=False):
     """
@@ -50,7 +49,7 @@ def search_movie(query, year=None, language=None, page=None, settings=None, incl
     :return: a list with found movies
     """
     query = unicodedata.normalize('NFC', query)
-    log('using title of %s to find movie' % query)
+    log('using title: %s year: %s to find movie' % (query, year))
     theurl = get_base_url(settings).format('search/movie')
     params = _set_params(None, language)
     params['query'] = query

@@ -370,6 +370,7 @@ def run():
         action = params["action"]
         if action == 'find' and 'title' in params:
             xbmc.log(f"Searching for movie: {params['title']} ({params.get('year', 'N/A')})", xbmc.LOGINFO)
+            xbmc.log(json.dumps(params, indent=2), xbmc.LOGDEBUG)
             search_for_movie(params["title"], params.get("year"), params['handle'], settings)
         elif action == 'getdetails' and ('url' in params or 'uniqueIDs' in params):
             xbmc.log(f"Getting details for: {params.get('url') or params.get('uniqueIDs')}", xbmc.LOGINFO)
