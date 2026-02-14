@@ -4,6 +4,11 @@ import urllib.request
 import urllib.error
 import xbmc
 import re
+import xbmcgui
+import xbmcaddon
+
+ADDON_SETTINGS = xbmcaddon.Addon()
+icon_path = ADDON_SETTINGS.getAddonInfo('icon')
 
 class DeepSeekExtractor:
     def __init__(self, api_key, base_url, model, prompt_template):
@@ -81,8 +86,8 @@ class DeepSeekExtractor:
                         xbmc.log(f"[DeepSeek] JSON decode failed for: {json_str}", xbmc.LOGERROR)
                 else:
                     xbmc.log("[DeepSeek] No JSON found in response", xbmc.LOGERROR)
-                    
+                    xbmcgui.Dialog().notification("TMDB CN Optimization", "DeepSeek 响应中未找到 JSON 数据", icon_path, 3000)
         except Exception as e:
             xbmc.log(f"[DeepSeek] Request Error: {e}", xbmc.LOGERROR)
-            
+            xbmcgui.Dialog().notification("TMDB CN Optimization", f"DeepSeek 请求错误: {e}", icon_path, 3000)
         return None
